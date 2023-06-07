@@ -119,10 +119,10 @@ public partial class StatusManager : EntityComponent
 	public T Create<T>() where T : struct, IStatus
 	{
 		T status = new() { Id = NextFreeId };
-		return Create(status);
+		return Add(status);
 	}
 
-	public T Create<T>(T status) where T : struct, IStatus
+	public T Add<T>(T status) where T : struct, IStatus
 	{
 		statuses[status.Id] = status;
 		NextFreeId += 1;
