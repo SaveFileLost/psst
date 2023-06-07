@@ -11,7 +11,6 @@ public partial class StatusManager : EntityComponent
 	[Net, Predicted] string Data { get; set; }
 	[Net, Predicted] uint NextFreeId { get; set; }
 
-
 	public Dictionary<uint, IStatus> statuses = new();
 
 	readonly Dictionary<byte, Type> typeById = new();
@@ -120,10 +119,13 @@ public partial class StatusManager : EntityComponent
 	public T Create<T>() where T : struct, IStatus
 	{
 		T status = new() { Id = NextFreeId };
+		return Create(status);
+	}
+
+	public T Create<T>(T status) where T : struct, IStatus
+	{
 		statuses[status.Id] = status;
-
 		NextFreeId += 1;
-
 		return status;
 	}
 
