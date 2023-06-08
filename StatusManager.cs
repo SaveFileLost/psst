@@ -57,7 +57,7 @@ public partial class StatusManager : EntityComponent
 		var stream = new System.IO.MemoryStream();
 		var writer = new System.IO.BinaryWriter(stream);
 
-		writer.Write((short)statuses.Count);
+		writer.Write((ushort)statuses.Count);
 		foreach (var (id, status) in statuses)
 		{
 			writer.Write(IdFromType(status.GetType()));
@@ -80,7 +80,7 @@ public partial class StatusManager : EntityComponent
 		var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(Data));
 		var reader = new System.IO.BinaryReader(stream);
 
-		var statusCount = reader.ReadInt16();
+		var statusCount = reader.ReadUInt16();
 		for (var i = 0; i < statusCount; i++)
 		{
 			var statusType = TypeFromId(reader.ReadByte());
