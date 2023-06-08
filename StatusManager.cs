@@ -104,7 +104,7 @@ public partial class StatusManager : EntityComponent
 		ReadData();
 
 		// When TimeUntil is true, that means it passed
-		var expiredStatuses = All<ITimedStatus>().Where(s => s.UntilRemoval);
+		var expiredStatuses = All<ITimedStatus>().Where(s => s.UntilRemoval < 0f);
 		foreach (var status in expiredStatuses)
 			Remove(status);
 
