@@ -16,6 +16,10 @@ public partial class StatusManager : EntityComponent
 	readonly Dictionary<byte, Type> typeById = new();
 	readonly Dictionary<Type, byte> idByType = new();
 
+	// Modifying statuses outside of prediction sets it to dirty
+	// It will not be read at the beginning of simulate so the change doesn't get overriden!
+	bool dataDirty = false;
+
 	Type TypeFromId(byte id)
 	{
 		if (typeById.TryGetValue(id, out var type))
@@ -50,6 +54,14 @@ public partial class StatusManager : EntityComponent
 	{
 		if (!Game.IsServer) return;
 		WriteData();
+	}
+
+	// Always run this after modifying the state!
+	void EvaluateDirty()
+	{
+		// For some reason Prediction.Enabled is true outside of simulate, so we have to check for the client too
+		if (Prediction.CurrentHost is null || !Prediction.Enabled)
+			dataDirty = true;
 	}
 
 	void WriteData()
@@ -101,7 +113,10 @@ public partial class StatusManager : EntityComponent
 
 	public IDisposable Simulate()
 	{
-		ReadData();
+		if (!dataDirty)
+			ReadData();
+
+		dataDirty = false;
 
 		// When TimeUntil is true, that means it passed
 		var expiredStatuses = All<ITimedStatus>().Where(s => s.UntilRemoval < 0f);
@@ -126,6 +141,9 @@ public partial class StatusManager : EntityComponent
 	{
 		statuses[status.Id] = status;
 		NextFreeId += 1;
+
+		EvaluateDirty();
+
 		return status;
 	}
 
@@ -137,7 +155,11 @@ public partial class StatusManager : EntityComponent
 	public List<T> All<T>() where T : IStatus => statuses.Values.OfType<T>().ToList();
 
 	public void Remove(IStatus status) => Remove(status.Id);
-	public void Remove(uint id) => statuses.Remove(id);
+	public void Remove(uint id)
+	{
+		statuses.Remove(id);
+		EvaluateDirty();
+	}
 }
 
 internal class SimulationDisposer : IDisposable
