@@ -9,7 +9,7 @@ namespace Psst;
 public partial class StatusManager : EntityComponent
 {
 	[Net, Predicted] string Data { get; set; }
-	[Net, Predicted] uint NextFreeId { get; set; }
+	[Net, Predicted] uint NextFreeId { get; set; } = 1;
 
 	public Dictionary<uint, IStatus> statuses = new();
 
@@ -145,16 +145,18 @@ public partial class StatusManager : EntityComponent
 		WriteData();
 	}
 
-	public T Create<T>() where T : IStatus, new()
-	{
-		T status = new() { Id = NextFreeId };
-
-		return Add(status);
-	}
+	public T Create<T>() where T : IStatus, new() => Add(new T());
 
 	public T Add<T>(T status) where T : IStatus, new()
 	{
-		statuses[status.Id] = status;
+		// Keys won't collide, ids start at 1
+		if (statuses.ContainsKey(status.Id))
+		{
+			Log.Error($"Manager already contains status {status.Id}. Are you looking for Replace()?");
+			return status;
+		}
+
+		statuses[NextFreeId] = status;
 		NextFreeId += 1;
 
 		EvaluateDirty();
@@ -166,6 +168,32 @@ public partial class StatusManager : EntityComponent
 	public T Get<T>(uint id) where T : IStatus
 		=> statuses.Values.OfType<T>().Where(s => s.Id == id).FirstOrDefault();
 
+	public bool TryGet<T>(out T status) where T : IStatus
+	{
+		var eligible = statuses.Values.OfType<T>();
+		if (!eligible.Any())
+		{
+			status = default;
+			return false;
+		}
+
+		status = eligible.First();
+		return true;
+	}
+
+	public bool TryGet<T>(uint id, out T status) where T : IStatus
+	{
+		var eligible = statuses.Values.OfType<T>().Where(s => s.Id == id);
+		if (!eligible.Any())
+		{
+			status = default;
+			return false;
+		}
+
+		status = eligible.First();
+		return true;
+	}
+
 	public List<IStatus> All() => statuses.Values.ToList();
 	public List<T> All<T>() where T : IStatus => statuses.Values.OfType<T>().ToList();
 
@@ -174,6 +202,18 @@ public partial class StatusManager : EntityComponent
 	{
 		statuses.Remove(id);
 		EvaluateDirty();
+	}
+
+	public void Replace(IStatus status)
+	{
+		// Keys won't collide, ids start at 1
+		if (!statuses.ContainsKey(status.Id))
+		{
+			Log.Error($"Manager doesn't contain status {status.Id}. Are you looking for Add()?");
+			return;
+		}
+
+		statuses[status.Id] = status;
 	}
 }
 
