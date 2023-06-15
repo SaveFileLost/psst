@@ -22,8 +22,13 @@ public partial class StatusManager : EntityComponent
 
 	Type TypeFromId(byte id)
 	{
+		Log.Info($"id given: {id}");
+
 		if (typeById.TryGetValue(id, out var type))
+		{
+			Log.Info($"type given: {type.Name}");
 			return type;
+		}
 
 		Log.Error($"{type.Name} is unidentified");
 		return null;
@@ -41,10 +46,16 @@ public partial class StatusManager : EntityComponent
 	public StatusManager()
 	{
 		var statusInterface = typeof(IStatus);
-		var statusTypes = TypeLibrary.GetTypes().Where(t => t.Interfaces.Contains(statusInterface));
+		var statusTypes = TypeLibrary.GetTypes()
+			.Where(t => t.Interfaces.Contains(statusInterface))
+			.OrderBy(t => t.Name);
+
+		// Default ordering isn't deterministic, so we order them by name
 
 		foreach (var (statusType, typeId) in statusTypes.Select((v, k) => (v, k)))
 		{
+			Log.Info(statusType.Name);
+
 			typeById[(byte)typeId] = statusType.TargetType;
 			idByType[statusType.TargetType] = (byte)typeId;
 		}
@@ -81,6 +92,9 @@ public partial class StatusManager : EntityComponent
 			if (status is ISerializableStatus ser)
 				ser.Write(writer);
 		}
+
+		stream.Position = 0;
+		Data = new System.IO.StreamReader(stream).ReadToEnd();
 	}
 
 	void ReadData()
