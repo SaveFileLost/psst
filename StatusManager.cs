@@ -145,13 +145,14 @@ public partial class StatusManager : EntityComponent
 		WriteData();
 	}
 
-	public T Create<T>() where T : struct, IStatus
+	public T Create<T>() where T : IStatus, new()
 	{
 		T status = new() { Id = NextFreeId };
+
 		return Add(status);
 	}
 
-	public T Add<T>(T status) where T : struct, IStatus
+	public T Add<T>(T status) where T : IStatus, new()
 	{
 		statuses[status.Id] = status;
 		NextFreeId += 1;
@@ -161,9 +162,9 @@ public partial class StatusManager : EntityComponent
 		return status;
 	}
 
-	public T? Get<T>() where T : struct, IStatus => statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
-	public T? Get<T>(uint id) where T : struct, IStatus
-		=> statuses.Values.OfType<T>().Where(s => s.Id == id).Cast<T?>().FirstOrDefault();
+	public T Get<T>() where T : IStatus => statuses.Values.OfType<T>().FirstOrDefault();
+	public T Get<T>(uint id) where T : IStatus
+		=> statuses.Values.OfType<T>().Where(s => s.Id == id).FirstOrDefault();
 
 	public List<IStatus> All() => statuses.Values.ToList();
 	public List<T> All<T>() where T : IStatus => statuses.Values.OfType<T>().ToList();

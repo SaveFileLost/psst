@@ -7,6 +7,11 @@ public interface IStatus
 	public uint Id { get; set; }
 }
 
+public class Status : IStatus
+{
+	public uint Id { get; set; }
+}
+
 public interface ISerializableStatus : IStatus
 {
 	public void Write(System.IO.BinaryWriter writer);
