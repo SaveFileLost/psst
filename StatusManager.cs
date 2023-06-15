@@ -51,8 +51,6 @@ public partial class StatusManager : EntityComponent
 
 		foreach (var (statusType, typeId) in statusTypes.Select((v, k) => (v, k)))
 		{
-			Log.Info(statusType.Name);
-
 			typeById[(byte)typeId] = statusType.TargetType;
 			idByType[statusType.TargetType] = (byte)typeId;
 		}
