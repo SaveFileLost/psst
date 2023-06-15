@@ -157,16 +157,15 @@ public partial class StatusManager : EntityComponent
 		NextFreeId += 1;
 
 		EvaluateDirty();
-		var poop = Get<IStatus>();
 
 		return status;
 	}
 
-#nullable enable
-	public T? Get<T>() where T : IStatus => statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
-	public T? Get<T>(uint id) where T : IStatus
+	struct Pooper : IStatus { public uint Id { get; set; } }
+
+	public T? Get<T>() where T : struct, IStatus => statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
+	public T? Get<T>(uint id) where T : struct, IStatus
 		=> statuses.Values.OfType<T>().Where(s => s.Id == id).Cast<T?>().FirstOrDefault();
-#nullable disable
 
 	public List<IStatus> All() => statuses.Values.ToList();
 	public List<T> All<T>() where T : notnull, IStatus => statuses.Values.OfType<T>().ToList();
