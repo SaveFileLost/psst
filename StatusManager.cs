@@ -198,7 +198,6 @@ public partial class StatusManager : EntityComponent
 	public void Remove(uint id)
 	{
 		statuses.Remove(id);
-		Log.Info(statuses.Count);
 		EvaluateDirty();
 	}
 
