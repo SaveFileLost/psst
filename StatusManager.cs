@@ -22,11 +22,8 @@ public partial class StatusManager : EntityComponent
 
 	Type TypeFromId(byte id)
 	{
-		Log.Info($"id given: {id}");
-
 		if (typeById.TryGetValue(id, out var type))
 		{
-			Log.Info($"type given: {type.Name}");
 			return type;
 		}
 
@@ -157,6 +154,8 @@ public partial class StatusManager : EntityComponent
 		}
 
 		statuses[NextFreeId] = status;
+		status.Id = NextFreeId;
+
 		NextFreeId += 1;
 
 		EvaluateDirty();
@@ -201,6 +200,7 @@ public partial class StatusManager : EntityComponent
 	public void Remove(uint id)
 	{
 		statuses.Remove(id);
+		Log.Info(statuses.Count);
 		EvaluateDirty();
 	}
 
@@ -214,6 +214,7 @@ public partial class StatusManager : EntityComponent
 		}
 
 		statuses[status.Id] = status;
+		EvaluateDirty();
 	}
 }
 
