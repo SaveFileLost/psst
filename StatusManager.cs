@@ -140,9 +140,9 @@ public partial class StatusManager : EntityComponent
 		WriteData();
 	}
 
-	public T Create<T>() where T : IStatus, new() => Add(new T());
+	public T Create<T>() where T : struct, IStatus => Add(new T());
 
-	public T Add<T>(T status) where T : IStatus, new()
+	public T Add<T>(T status) where T : struct, IStatus
 	{
 		// Keys won't collide, ids start at 1
 		if (statuses.ContainsKey(status.Id))
@@ -157,42 +157,19 @@ public partial class StatusManager : EntityComponent
 		NextFreeId += 1;
 
 		EvaluateDirty();
+		var poop = Get<IStatus>();
 
 		return status;
 	}
 
-	public T Get<T>() where T : IStatus => statuses.Values.OfType<T>().FirstOrDefault();
-	public T Get<T>(uint id) where T : IStatus
-		=> statuses.Values.OfType<T>().Where(s => s.Id == id).FirstOrDefault();
-
-	public bool TryGet<T>(out T status) where T : IStatus
-	{
-		var eligible = statuses.Values.OfType<T>();
-		if (!eligible.Any())
-		{
-			status = default;
-			return false;
-		}
-
-		status = eligible.First();
-		return true;
-	}
-
-	public bool TryGet<T>(uint id, out T status) where T : IStatus
-	{
-		var eligible = statuses.Values.OfType<T>().Where(s => s.Id == id);
-		if (!eligible.Any())
-		{
-			status = default;
-			return false;
-		}
-
-		status = eligible.First();
-		return true;
-	}
+#nullable enable
+	public T? Get<T>() where T : IStatus => statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
+	public T? Get<T>(uint id) where T : IStatus
+		=> statuses.Values.OfType<T>().Where(s => s.Id == id).Cast<T?>().FirstOrDefault();
+#nullable disable
 
 	public List<IStatus> All() => statuses.Values.ToList();
-	public List<T> All<T>() where T : IStatus => statuses.Values.OfType<T>().ToList();
+	public List<T> All<T>() where T : notnull, IStatus => statuses.Values.OfType<T>().ToList();
 
 	public void Remove(IStatus status) => Remove(status.Id);
 	public void Remove(uint id)
@@ -201,7 +178,7 @@ public partial class StatusManager : EntityComponent
 		EvaluateDirty();
 	}
 
-	public void Replace(IStatus status)
+	public void Replace<T>(T status) where T : struct, IStatus
 	{
 		// Keys won't collide, ids start at 1
 		if (!statuses.ContainsKey(status.Id))
