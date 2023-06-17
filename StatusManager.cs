@@ -20,6 +20,8 @@ public partial class StatusManager : EntityComponent
 	// It will not be read at the beginning of simulate so the change doesn't get overriden!
 	bool dataDirty = false;
 
+	bool isSimulating = false;
+
 	Type TypeFromId(byte id)
 	{
 		if (typeById.TryGetValue(id, out var type))
@@ -65,6 +67,12 @@ public partial class StatusManager : EntityComponent
 	// Always run this after modifying the state!
 	void EvaluateDirty()
 	{
+		if (!isSimulating && Game.IsClient)
+		{
+			Log.Info("StatusManager modified clientside outside of simulate, changes WILL be lost!");
+			return;
+		}
+
 		// For some reason Prediction.Enabled is true outside of simulate, so we have to check for the client too
 		if (Prediction.CurrentHost is null || !Prediction.Enabled)
 			dataDirty = true;
@@ -126,6 +134,7 @@ public partial class StatusManager : EntityComponent
 			ReadData();
 
 		dataDirty = false;
+		isSimulating = true;
 
 		// When TimeUntil is true, that means it passed
 		var expiredStatuses = All<ITimedStatus>().Where(s => s.UntilRemoval < 0f);
@@ -137,6 +146,7 @@ public partial class StatusManager : EntityComponent
 
 	internal void EndSimulate()
 	{
+		isSimulating = false;
 		WriteData();
 	}
 
@@ -160,8 +170,6 @@ public partial class StatusManager : EntityComponent
 
 		return status;
 	}
-
-	struct Pooper : IStatus { public uint Id { get; set; } }
 
 	public T? Get<T>() where T : struct, IStatus => statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
 	public T? Get<T>(uint id) where T : struct, IStatus
