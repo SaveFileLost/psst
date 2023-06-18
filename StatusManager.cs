@@ -38,7 +38,7 @@ public partial class StatusManager : EntityComponent
 		if (idByType.TryGetValue(type, out var id))
 			return id;
 
-		Log.Error($"{type.Name} is unidentified");
+		Log.Error($"{type?.Name} is unidentified");
 		return 0;
 	}
 
@@ -83,7 +83,8 @@ public partial class StatusManager : EntityComponent
 		var stream = new System.IO.MemoryStream();
 		var writer = new System.IO.BinaryWriter(stream);
 
-		writer.Write((ushort)statuses.Count);
+		// If this is bigger than 255 we are FUCKED
+		writer.Write((byte)statuses.Count);
 		foreach (var (id, status) in statuses)
 		{
 			writer.Write(IdFromType(status.GetType()));
@@ -97,19 +98,19 @@ public partial class StatusManager : EntityComponent
 		}
 
 		stream.Position = 0;
-		Data = new System.IO.StreamReader(stream).ReadToEnd();
+		Data = Z85.ToZ85String(stream.ToArray(), autoPad: true);
 	}
 
 	void ReadData()
 	{
 		if (Data == default) return;
 
-		statuses = new();
+		statuses.Clear();
 
-		var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(Data));
+		var stream = new System.IO.MemoryStream(Z85.FromZ85String(Data));
 		var reader = new System.IO.BinaryReader(stream);
 
-		var statusCount = reader.ReadUInt16();
+		var statusCount = reader.ReadByte();
 		for (var i = 0; i < statusCount; i++)
 		{
 			var statusType = TypeFromId(reader.ReadByte());
