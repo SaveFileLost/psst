@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using Sandbox;
 
 namespace Psst;
@@ -80,8 +82,8 @@ public partial class StatusManager : EntityComponent
 
 	void WriteData()
 	{
-		var stream = new System.IO.MemoryStream();
-		var writer = new System.IO.BinaryWriter(stream);
+		var stream = new MemoryStream();
+		var writer = new BinaryWriter(stream);
 
 		// If this is bigger than 255 we are FUCKED
 		writer.Write((byte)statuses.Count);
@@ -97,7 +99,6 @@ public partial class StatusManager : EntityComponent
 				ser.Write(writer);
 		}
 
-		stream.Position = 0;
 		Data = Z85.ToZ85String(stream.ToArray(), autoPad: true);
 	}
 
@@ -107,8 +108,8 @@ public partial class StatusManager : EntityComponent
 
 		statuses.Clear();
 
-		var stream = new System.IO.MemoryStream(Z85.FromZ85String(Data));
-		var reader = new System.IO.BinaryReader(stream);
+		var stream = new MemoryStream(Z85.FromZ85String(Data));
+		var reader = new BinaryReader(stream);
 
 		var statusCount = reader.ReadByte();
 		for (var i = 0; i < statusCount; i++)
