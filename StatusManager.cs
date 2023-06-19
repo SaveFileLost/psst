@@ -3,6 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Text;
 using Sandbox;
 
 namespace Psst;
@@ -99,7 +100,11 @@ public partial class StatusManager : EntityComponent
 				ser.Write(writer);
 		}
 
-		Data = Z85.ToZ85String(stream.ToArray(), autoPad: true);
+		var bytes = stream.GetBuffer();
+		writer.Dispose();
+		stream.Dispose();
+
+		Data = new string(bytes.Select(b => (char)b).ToArray());
 	}
 
 	void ReadData()
@@ -108,7 +113,8 @@ public partial class StatusManager : EntityComponent
 
 		statuses.Clear();
 
-		var stream = new MemoryStream(Z85.FromZ85String(Data));
+		var bytes = Data.ToArray().Select(c => (byte)c).ToArray();
+		var stream = new MemoryStream(bytes);
 		var reader = new BinaryReader(stream);
 
 		var statusCount = reader.ReadByte();
@@ -128,6 +134,9 @@ public partial class StatusManager : EntityComponent
 
 			statuses[status.Id] = status;
 		}
+
+		reader.Dispose();
+		stream.Dispose();
 	}
 
 	public IDisposable Simulate()
