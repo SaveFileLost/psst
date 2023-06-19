@@ -83,8 +83,8 @@ public partial class StatusManager : EntityComponent
 
 	void WriteData()
 	{
-		var stream = new MemoryStream();
-		var writer = new BinaryWriter(stream);
+		using var origin = new MemoryStream();
+		using var writer = new BinaryWriter(origin);
 
 		// If this is bigger than 255 we are FUCKED
 		writer.Write((byte)statuses.Count);
@@ -100,9 +100,9 @@ public partial class StatusManager : EntityComponent
 				ser.Write(writer);
 		}
 
-		var bytes = stream.GetBuffer();
-		writer.Dispose();
-		stream.Dispose();
+		writer.Flush();
+
+		var bytes = origin.GetBuffer();
 
 		Data = new string(bytes.Select(b => (char)b).ToArray());
 	}
@@ -114,8 +114,8 @@ public partial class StatusManager : EntityComponent
 		statuses.Clear();
 
 		var bytes = Data.ToArray().Select(c => (byte)c).ToArray();
-		var stream = new MemoryStream(bytes);
-		var reader = new BinaryReader(stream);
+		using var input = new MemoryStream(bytes);
+		using var reader = new BinaryReader(input);
 
 		var statusCount = reader.ReadByte();
 		for (var i = 0; i < statusCount; i++)
@@ -125,7 +125,7 @@ public partial class StatusManager : EntityComponent
 			var status = TypeLibrary.Create<IStatus>(statusType);
 			status.Id = reader.ReadUInt32();
 
-			// TimeUntil probably drifts here. There is no way to create it from absolute time.
+			// There is no way to create TimeUntil from absolute time. Sucks.
 			if (status is ITimedStatus timed)
 				timed.UntilRemoval = Time.Now - reader.ReadSingle();
 
@@ -134,9 +134,6 @@ public partial class StatusManager : EntityComponent
 
 			statuses[status.Id] = status;
 		}
-
-		reader.Dispose();
-		stream.Dispose();
 	}
 
 	public IDisposable Simulate()
