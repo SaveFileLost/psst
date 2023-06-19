@@ -87,7 +87,7 @@ public partial class StatusManager : EntityComponent
 		using var writer = new BinaryWriter(origin);
 
 		// If this is bigger than 255 we are FUCKED
-		writer.Write((byte)statuses.Count);
+		writer.Write((ushort)statuses.Count);
 		foreach (var (id, status) in statuses)
 		{
 			writer.Write(IdFromType(status.GetType()));
@@ -117,7 +117,7 @@ public partial class StatusManager : EntityComponent
 		using var input = new MemoryStream(bytes);
 		using var reader = new BinaryReader(input);
 
-		var statusCount = reader.ReadByte();
+		var statusCount = reader.ReadUInt16();
 		for (var i = 0; i < statusCount; i++)
 		{
 			var statusType = TypeFromId(reader.ReadByte());
@@ -167,14 +167,6 @@ public partial class StatusManager : EntityComponent
 		{
 			Log.Error($"Manager already contains status {status.Id}. Are you looking for Replace()?");
 			return status;
-		}
-
-		const byte countLimit = byte.MaxValue;
-		if (statuses.Count >= countLimit)
-		{
-			Log.Error($"Whoa there pal, you reached the {countLimit} status limit.");
-			Log.Error("If something went wrong in your code - this is your sign");
-			statuses.Clear(); // This is the best we can do
 		}
 
 		statuses[NextFreeId] = status;
