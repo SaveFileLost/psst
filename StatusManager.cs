@@ -72,7 +72,7 @@ public partial class StatusManager : EntityComponent
 	{
 		if (!isSimulating && Game.IsClient)
 		{
-			Log.Info("StatusManager modified clientside outside of simulate, changes WILL be lost!");
+			Log.Warning("StatusManager modified clientside outside of simulate, changes WILL be lost!");
 			return;
 		}
 
