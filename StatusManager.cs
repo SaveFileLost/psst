@@ -142,10 +142,7 @@ public partial class StatusManager : EntityComponent
 
 		var expiredStatuses = All().Where(s => s.RemoveAfter < Time.Now);
 		foreach (var status in expiredStatuses)
-		{
 			Remove(status.Id);
-			Log.Info("removv");
-		}
 
 		return new SimulationDisposer(this);
 	}
