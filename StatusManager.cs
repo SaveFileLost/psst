@@ -175,21 +175,6 @@ public partial class StatusManager : EntityComponent
 	}
 
 	public bool Has<T>() where T : struct, IStatus => statuses.Values.OfType<T>().Any();
-	public bool Has<T0, T1>()
-		where T0 : struct, IStatus
-		where T1 : struct, IStatus
-	=> statuses.Values.Where(s => s is T0 or T1).Any();
-	public bool Has<T0, T1, T2>()
-		where T0 : struct, IStatus
-		where T1 : struct, IStatus
-		where T2 : struct, IStatus
-	=> statuses.Values.Where(s => s is T0 or T1 or T2).Any();
-	public bool Has<T0, T1, T2, T3>()
-		where T0 : struct, IStatus
-		where T1 : struct, IStatus
-		where T2 : struct, IStatus
-		where T3 : struct, IStatus
-	=> statuses.Values.Where(s => s is T0 or T1 or T2 or T3).Any();
 
 	public T? Get<T>() where T : struct, IStatus => statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
 	public T? Get<T>(uint id) where T : struct, IStatus
