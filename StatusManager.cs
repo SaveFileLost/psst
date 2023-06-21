@@ -93,8 +93,7 @@ public partial class StatusManager : EntityComponent
 			writer.Write(IdFromType(status.GetType()));
 			writer.Write(id);
 
-			if (status is ITimedStatus timed)
-				writer.Write(timed.UntilRemoval.Absolute);
+			writer.Write(status.RemoveAfter);
 
 			if (status is ISerializableStatus ser)
 				ser.Write(writer);
@@ -124,10 +123,7 @@ public partial class StatusManager : EntityComponent
 
 			var status = TypeLibrary.Create<IStatus>(statusType);
 			status.Id = reader.ReadUInt32();
-
-			// There is no way to create TimeUntil from absolute time. Sucks.
-			if (status is ITimedStatus timed)
-				timed.UntilRemoval = Time.Now - reader.ReadSingle();
+			status.RemoveAfter = reader.ReadSingle();
 
 			if (status is ISerializableStatus ser)
 				ser.Read(reader);
@@ -144,10 +140,12 @@ public partial class StatusManager : EntityComponent
 		dataDirty = false;
 		isSimulating = true;
 
-		// When TimeUntil is true, that means it passed
-		var expiredStatuses = All<ITimedStatus>().Where(s => s.UntilRemoval < 0f);
+		var expiredStatuses = All().Where(s => s.RemoveAfter < Time.Now);
 		foreach (var status in expiredStatuses)
-			Remove(status);
+		{
+			Remove(status.Id);
+			Log.Info("removv");
+		}
 
 		return new SimulationDisposer(this);
 	}
@@ -158,7 +156,7 @@ public partial class StatusManager : EntityComponent
 		WriteData();
 	}
 
-	public T Create<T>() where T : struct, IStatus => Add(new T());
+	public T Create<T>() where T : struct, IStatus => Add(new T() with { RemoveAfter = float.MaxValue });
 
 	public T Add<T>(T status) where T : struct, IStatus
 	{
@@ -203,10 +201,18 @@ public partial class StatusManager : EntityComponent
 	public List<IStatus> All() => statuses.Values.ToList();
 	public List<T> All<T>() where T : notnull, IStatus => statuses.Values.OfType<T>().ToList();
 
-	public void Remove(IStatus status) => Remove(status.Id);
 	public void Remove(uint id)
 	{
 		statuses.Remove(id);
+		EvaluateDirty();
+	}
+
+	public void Remove(uint id, float delay)
+	{
+		if (statuses[id] is not IStatus status) return;
+
+		status.RemoveAfter = Time.Now + delay;
+		statuses[id] = status;
 		EvaluateDirty();
 	}
 
