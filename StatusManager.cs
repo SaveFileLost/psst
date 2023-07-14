@@ -23,6 +23,7 @@ public partial class StatusManager : EntityComponent
     // It will not be read at the beginning of simulate so the change doesn't get overriden!
     bool dataDirty = false;
 
+    // If this status manager isnt ours, this indicates the last tick we read data from here
     int lastForeignRead = -1;
 
     bool isSimulating = false;
@@ -84,11 +85,11 @@ public partial class StatusManager : EntityComponent
     }
 
     // Run this to lazy load data when accessing statuses from the non-owning client
-    void QualifyAccess()
+    void EvaluateForeignRead()
     {
-        if (Game.LocalPawn != Entity.Client && lastForeignRead != Time.Tick) return;
+        if (Game.IsServer || Game.LocalClient == Entity.Client || lastForeignRead == Time.Tick) return;
         lastForeignRead = Time.Tick;
-		Log.Info("qualified");
+
         ReadData();
     }
 
@@ -187,27 +188,27 @@ public partial class StatusManager : EntityComponent
 
     public bool Has<T>() where T : struct, IStatus
     {
-        QualifyAccess();
+        EvaluateForeignRead();
         return statuses.Values.OfType<T>().Any();
     }
     public T? Get<T>() where T : struct, IStatus
     {
-        QualifyAccess();
+        EvaluateForeignRead();
         return statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
     }
     public T? Get<T>(uint id) where T : struct, IStatus
     {
-        QualifyAccess();
+        EvaluateForeignRead();
         return statuses.Values.OfType<T>().Where(s => s.Id == id).Cast<T?>().FirstOrDefault();
     }
     public List<IStatus> All()
     {
-        QualifyAccess();
+        EvaluateForeignRead();
         return statuses.Values.ToList();
     }
     public List<T> All<T>() where T : notnull, IStatus
     {
-        QualifyAccess();
+        EvaluateForeignRead();
         return statuses.Values.OfType<T>().ToList();
     }
 
