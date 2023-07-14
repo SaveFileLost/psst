@@ -11,211 +11,239 @@ namespace Psst;
 [Prefab]
 public partial class StatusManager : EntityComponent
 {
-	[Net, Predicted] string Data { get; set; }
-	[Net, Predicted] uint NextFreeId { get; set; } = 1;
+    [Net, Predicted] string Data { get; set; }
+    [Net, Predicted] uint NextFreeId { get; set; } = 1;
 
-	public Dictionary<uint, IStatus> statuses = new();
+    public Dictionary<uint, IStatus> statuses = new();
 
-	readonly Dictionary<byte, Type> typeById = new();
-	readonly Dictionary<Type, byte> idByType = new();
+    readonly Dictionary<byte, Type> typeById = new();
+    readonly Dictionary<Type, byte> idByType = new();
 
-	// Modifying statuses outside of prediction sets it to dirty
-	// It will not be read at the beginning of simulate so the change doesn't get overriden!
-	bool dataDirty = false;
+    // Modifying statuses outside of prediction sets it to dirty
+    // It will not be read at the beginning of simulate so the change doesn't get overriden!
+    bool dataDirty = false;
 
-	bool isSimulating = false;
+    int lastForeignRead = -1;
 
-	Type TypeFromId(byte id)
-	{
-		if (typeById.TryGetValue(id, out var type))
-		{
-			return type;
-		}
+    bool isSimulating = false;
 
-		Log.Error($"{type.Name} is unidentified");
-		return null;
-	}
+    Type TypeFromId(byte id)
+    {
+        if (typeById.TryGetValue(id, out var type))
+        {
+            return type;
+        }
 
-	byte IdFromType(Type type)
-	{
-		if (idByType.TryGetValue(type, out var id))
-			return id;
+        Log.Error($"{type.Name} is unidentified");
+        return null;
+    }
 
-		Log.Error($"{type?.Name} is unidentified");
-		return 0;
-	}
+    byte IdFromType(Type type)
+    {
+        if (idByType.TryGetValue(type, out var id))
+            return id;
 
-	public StatusManager()
-	{
-		var statusInterface = typeof(IStatus);
-		var statusTypes = TypeLibrary.GetTypes()
-			.Where(t => t.Interfaces.Contains(statusInterface))
-			.OrderBy(t => t.Name);
+        Log.Error($"{type?.Name} is unidentified");
+        return 0;
+    }
 
-		// Default ordering isn't deterministic, so we order them by name
+    public StatusManager()
+    {
+        var statusInterface = typeof(IStatus);
+        var statusTypes = TypeLibrary.GetTypes()
+            .Where(t => t.Interfaces.Contains(statusInterface))
+            .OrderBy(t => t.Name);
 
-		foreach (var (statusType, typeId) in statusTypes.Select((v, k) => (v, k)))
-		{
-			typeById[(byte)typeId] = statusType.TargetType;
-			idByType[statusType.TargetType] = (byte)typeId;
-		}
-	}
+        // Default ordering isn't deterministic, so we order them by name
 
-	protected override void OnActivate()
-	{
-		if (!Game.IsServer) return;
-		WriteData();
-	}
+        foreach (var (statusType, typeId) in statusTypes.Select((v, k) => (v, k)))
+        {
+            typeById[(byte)typeId] = statusType.TargetType;
+            idByType[statusType.TargetType] = (byte)typeId;
+        }
+    }
 
-	// Always run this after modifying the state!
-	void EvaluateDirty()
-	{
-		if (!isSimulating && Game.IsClient)
-		{
-			Log.Warning("StatusManager modified clientside outside of simulate, changes WILL be lost!");
-			return;
-		}
+    protected override void OnActivate()
+    {
+        if (!Game.IsServer) return;
+        WriteData();
+    }
 
-		// For some reason Prediction.Enabled is true outside of simulate, so we have to check for the client too
-		if (Prediction.CurrentHost is null || !Prediction.Enabled)
-			dataDirty = true;
-	}
+    // Always run this after modifying the state!
+    void EvaluateDirty()
+    {
+        if (!isSimulating && Game.IsClient)
+        {
+            Log.Warning("StatusManager modified clientside outside of simulate, changes WILL be lost!");
+            return;
+        }
 
-	void WriteData()
-	{
-		using var origin = new MemoryStream();
-		using var writer = new BinaryWriter(origin);
+        // For some reason Prediction.Enabled is true outside of simulate, so we have to check for the client too
+        if (Prediction.CurrentHost is null || !Prediction.Enabled)
+            dataDirty = true;
+    }
 
-		// If this is bigger than 255 we are FUCKED
-		writer.Write((ushort)statuses.Count);
-		foreach (var (id, status) in statuses)
-		{
-			writer.Write(IdFromType(status.GetType()));
-			writer.Write(id);
+    // Run this to lazy load data when accessing statuses from the non-owning client
+    void QualifyAccess()
+    {
+        if (Game.LocalPawn != Entity.Client && lastForeignRead != Time.Tick) return;
+        lastForeignRead = Time.Tick;
+		Log.Info("qualified");
+        ReadData();
+    }
 
-			writer.Write(status.RemoveAfter);
+    void WriteData()
+    {
+        using var origin = new MemoryStream();
+        using var writer = new BinaryWriter(origin);
 
-			if (status is ISerializableStatus ser)
-				ser.Write(writer);
-		}
+        // If this is bigger than 255 we are FUCKED
+        writer.Write((ushort)statuses.Count);
+        foreach (var (id, status) in statuses)
+        {
+            writer.Write(IdFromType(status.GetType()));
+            writer.Write(id);
 
-		writer.Flush();
+            writer.Write(status.RemoveAfter);
 
-		var bytes = origin.GetBuffer();
+            if (status is ISerializableStatus ser)
+                ser.Write(writer);
+        }
 
-		Data = new string(bytes.Select(b => (char)b).ToArray());
-	}
+        writer.Flush();
 
-	void ReadData()
-	{
-		if (Data == default) return;
+        var bytes = origin.GetBuffer();
 
-		statuses.Clear();
+        Data = new string(bytes.Select(b => (char)b).ToArray());
+    }
 
-		var bytes = Data.ToArray().Select(c => (byte)c).ToArray();
-		using var input = new MemoryStream(bytes);
-		using var reader = new BinaryReader(input);
+    void ReadData()
+    {
+        if (Data == default) return;
 
-		var statusCount = reader.ReadUInt16();
-		for (var i = 0; i < statusCount; i++)
-		{
-			var statusType = TypeFromId(reader.ReadByte());
+        statuses.Clear();
 
-			var status = TypeLibrary.Create<IStatus>(statusType);
-			status.Id = reader.ReadUInt32();
-			status.RemoveAfter = reader.ReadSingle();
+        var bytes = Data.ToArray().Select(c => (byte)c).ToArray();
+        using var input = new MemoryStream(bytes);
+        using var reader = new BinaryReader(input);
 
-			if (status is ISerializableStatus ser)
-				ser.Read(reader);
+        var statusCount = reader.ReadUInt16();
+        for (var i = 0; i < statusCount; i++)
+        {
+            var statusType = TypeFromId(reader.ReadByte());
 
-			statuses[status.Id] = status;
-		}
-	}
+            var status = TypeLibrary.Create<IStatus>(statusType);
+            status.Id = reader.ReadUInt32();
+            status.RemoveAfter = reader.ReadSingle();
 
-	public IDisposable Simulate()
-	{
-		if (!dataDirty)
-			ReadData();
+            if (status is ISerializableStatus ser)
+                ser.Read(reader);
 
-		dataDirty = false;
-		isSimulating = true;
+            statuses[status.Id] = status;
+        }
+    }
 
-		var expiredStatuses = All().Where(s => s.RemoveAfter < Time.Now);
-		foreach (var status in expiredStatuses)
-			Remove(status.Id);
+    public IDisposable Simulate()
+    {
+        if (!dataDirty)
+            ReadData();
 
-		return new SimulationDisposer(this);
-	}
+        dataDirty = false;
+        isSimulating = true;
 
-	internal void EndSimulate()
-	{
-		isSimulating = false;
-		WriteData();
-	}
+        var expiredStatuses = All().Where(s => s.RemoveAfter < Time.Now);
+        foreach (var status in expiredStatuses)
+            Remove(status.Id);
 
-	public T Create<T>() where T : struct, IStatus => Add(new T() with { RemoveAfter = float.MaxValue });
+        return new SimulationDisposer(this);
+    }
 
-	public T Add<T>(T status) where T : struct, IStatus
-	{
-		// Keys won't collide, ids start at 1
-		if (statuses.ContainsKey(status.Id))
-		{
-			Log.Error($"Manager already contains status {status.Id}. Are you looking for Replace()?");
-			return status;
-		}
+    internal void EndSimulate()
+    {
+        isSimulating = false;
+        WriteData();
+    }
 
-		statuses[NextFreeId] = status;
-		status.Id = NextFreeId;
+    public T Create<T>() where T : struct, IStatus => Add(new T() with { RemoveAfter = float.MaxValue });
 
-		NextFreeId += 1;
+    public T Add<T>(T status) where T : struct, IStatus
+    {
+        // Keys won't collide, ids start at 1
+        if (statuses.ContainsKey(status.Id))
+        {
+            Log.Error($"Manager already contains status {status.Id}. Are you looking for Replace()?");
+            return status;
+        }
 
-		EvaluateDirty();
+        statuses[NextFreeId] = status;
+        status.Id = NextFreeId;
 
-		return status;
-	}
+        NextFreeId += 1;
 
-	public bool Has<T>() where T : struct, IStatus => statuses.Values.OfType<T>().Any();
+        EvaluateDirty();
 
-	public T? Get<T>() where T : struct, IStatus => statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
-	public T? Get<T>(uint id) where T : struct, IStatus
-		=> statuses.Values.OfType<T>().Where(s => s.Id == id).Cast<T?>().FirstOrDefault();
+        return status;
+    }
 
-	public List<IStatus> All() => statuses.Values.ToList();
-	public List<T> All<T>() where T : notnull, IStatus => statuses.Values.OfType<T>().ToList();
+    public bool Has<T>() where T : struct, IStatus
+    {
+        QualifyAccess();
+        return statuses.Values.OfType<T>().Any();
+    }
+    public T? Get<T>() where T : struct, IStatus
+    {
+        QualifyAccess();
+        return statuses.Values.OfType<T>().Cast<T?>().FirstOrDefault();
+    }
+    public T? Get<T>(uint id) where T : struct, IStatus
+    {
+        QualifyAccess();
+        return statuses.Values.OfType<T>().Where(s => s.Id == id).Cast<T?>().FirstOrDefault();
+    }
+    public List<IStatus> All()
+    {
+        QualifyAccess();
+        return statuses.Values.ToList();
+    }
+    public List<T> All<T>() where T : notnull, IStatus
+    {
+        QualifyAccess();
+        return statuses.Values.OfType<T>().ToList();
+    }
 
-	public void Remove(uint id)
-	{
-		statuses.Remove(id);
-		EvaluateDirty();
-	}
+    public void Remove(uint id)
+    {
+        statuses.Remove(id);
+        EvaluateDirty();
+    }
 
-	public void Remove(uint id, float delay)
-	{
-		if (statuses[id] is not IStatus status) return;
+    public void Remove(uint id, float delay)
+    {
+        if (statuses[id] is not IStatus status) return;
 
-		status.RemoveAfter = Time.Now + delay;
-		statuses[id] = status;
-		EvaluateDirty();
-	}
+        status.RemoveAfter = Time.Now + delay;
+        statuses[id] = status;
+        EvaluateDirty();
+    }
 
-	public void Replace<T>(T status) where T : struct, IStatus
-	{
-		// Keys won't collide, ids start at 1
-		if (!statuses.ContainsKey(status.Id))
-		{
-			Log.Error($"Manager doesn't contain status {status.Id}. Are you looking for Add()?");
-			return;
-		}
+    public void Replace<T>(T status) where T : struct, IStatus
+    {
+        // Keys won't collide, ids start at 1
+        if (!statuses.ContainsKey(status.Id))
+        {
+            Log.Error($"Manager doesn't contain status {status.Id}. Are you looking for Add()?");
+            return;
+        }
 
-		statuses[status.Id] = status;
-		EvaluateDirty();
-	}
+        statuses[status.Id] = status;
+        EvaluateDirty();
+    }
 }
 
 internal class SimulationDisposer : IDisposable
 {
-	readonly StatusManager statusManager;
+    readonly StatusManager statusManager;
 
-	public SimulationDisposer(StatusManager sm) => statusManager = sm;
-	void IDisposable.Dispose() => statusManager.EndSimulate();
+    public SimulationDisposer(StatusManager sm) => statusManager = sm;
+    void IDisposable.Dispose() => statusManager.EndSimulate();
 }
